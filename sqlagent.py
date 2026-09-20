@@ -12,6 +12,10 @@ from langchain_community.utilities import SQLDatabase
 # and the helper function to construct the SQL agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit, create_sql_agent
 
+# Memory store
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # 2. Build MySQL Connection String from Environment Variables
 # Read credentials from .env to keep passwords and host details hidden
@@ -76,19 +80,81 @@ try:
         4. sql_db_query_checker: Validates SQL syntax before execution to prevent syntax errors.
     """
 
+    prompt = ChatPromptTemplate.from_messages([ # list of tuples
+        ("system",CUSTOM_SYSTEM_PREFIX),
+        MessagesPlaceholder(variable_name = "chat_history"),
+        ('human',"{input}"),
+        MessagesPlaceholder(variable_name = 'agent_scratchpad'),
+        ])
 
-    # 6. Run Test Query
-    query = "Who is our top spending customer?"
-    response = agent_executor.invoke({"input": query})
-    print("\n--- Output ---")
-    print(response["output"])   
+    # 5. Create SQL Agent
+    agent_executor = create_sql_agent(
+        llm=llm,
+        db=db,
+        agent_type="tool-calling",
+        prefix= CUSTOM_SYSTEM_PREFIX,
+        prompt = prompt,
+        verbose=True 
+    )
 
-    # Test malicious query attempt
-    query = "Delete all cancelled orders from the orders table."
-    response = agent_executor.invoke({"input": query})
+    """When you pass agent_type="tool-calling", LangChain equips the LLM with a set of pre-built SQL tools:
+        1. sql_db_list_tables: Lists all available tables in your database.
+        2. sql_db_schema: Fetches table structures, column names, data types, and foreign key rules.
+        3. sql_db_query: Runs a generated SQL statement and retrieves raw rows.
+        4. sql_db_query_checker: Validates SQL syntax before execution to prevent syntax errors.
+    """
 
-    print("\n--- Output ---")
-    print(response["output"])
+
+    # In-memory dictionary to hold session histories
+    store = {}
+
+    def get_session_history(session_id: str):
+        if session_id not in store:
+            store[session_id] = ChatMessageHistory()
+        return store[session_id]
+
+
+    agent_with_history = RunnableWithMessageHistory(
+        agent_executor, # what to run. Tells LangChain which agent workflow should be given memory capabilities.
+        get_session_history, # to fetch history
+        input_messages_key='input',    # what to store in history
+        history_messages_key="chat_history", # where to check for history
+
+    )
+
+
+
+    # Invoke agent with history
+    # Session 1: Initial Question
+    response1 = agent_with_history.invoke( # distionary of input variables
+        {'input': "Who is our top spending customer?"},
+        config={"configurable": {"session_id": "user_session_1"}}  # for get_session_history()
+    )
+    print("Q1 Answer:", response1["output"])
+
+    # Session 1: Follow-up Question (Agent remembers previous answer context)
+    response2 = agent_with_history.invoke(
+        {"input": "What products did they order?"},
+        config={"configurable": {"session_id": "user_session_1"}}
+    )
+    print("Q2 Answer:", response2["output"])
+
+
+
+
+
+    # # 6. Run Test Query
+    # query = "Who is our top spending customer?"
+    # response = agent_executor.invoke({"input": query})
+    # print("\n--- Output ---")
+    # print(response["output"])   
+
+    # # Test malicious query attempt
+    # query = "Delete all cancelled orders from the orders table."
+    # response = agent_executor.invoke({"input": query})
+
+    # print("\n--- Output ---")
+    # print(response["output"])
 
 
 
