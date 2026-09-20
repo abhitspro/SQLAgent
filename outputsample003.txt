@@ -1,0 +1,66 @@
+(.venv) PS E:\DS-GenAI\SQLAgent> & e:\DS-GenAI\SQLAgent\.venv\Scripts\python.exe e:/DS-GenAI/SQLAgent/sqlagent.py
+e:\DS-GenAI\SQLAgent\sqlagent.py:9: DeprecationWarning: `langchain-community` is being sunset and is no longer actively maintained. See https://github.com/langchain-ai/langchain-community/issues/674 for details and migration guidance toward standalone integration packages.
+  from langchain_community.utilities import SQLDatabase
+Connected to Dialect: mysql
+Available Tables: ['categories', 'customers', 'order_items', 'orders', 'products']
+<sys>:0: LangChainDeprecationWarning: RunnableWithMessageHistory is deprecated. Use LangGraph's built-in persistence instead.
+
+
+> Entering new SQL Agent Executor chain...
+
+Invoking: `sql_db_list_tables` with `{'tool_input': ''}`
+
+
+categories, customers, order_items, orders, products
+Invoking: `sql_db_query_checker` with `{'query': 'SELECT * FROM products WHERE product_id = 101;'}`
+
+
+SELECT * FROM products WHERE product_id = 101;
+Invoking: `sql_db_query` with `{'query': 'SELECT * FROM products WHERE product_id = 101;'}`
+
+
+I queried the `products` table for product ID 101, but no row was returned—meaning that product isn’t in the database. Because I don’t have a price to work with, I can’t compute a 20 % discount for it. If you have a different product ID or need help with another item, just let me know!
+
+> Finished chain.
+
+Result: I queried the `products` table for product ID 101, but no row was returned—meaning that product isn’t in the database. Because I don’t have a price to work with, I can’t compute a 20 % discount for it. If you have a different product ID or need help with another item, just let me know!
+
+
+> Entering new SQL Agent Executor chain...
+
+Invoking: `sql_db_query_checker` with `{'query': 'SELECT price FROM products WHERE product_id = 1;'}`
+
+
+SELECT price FROM products WHERE product_id = 1;
+Invoking: `sql_db_query` with `{'query': 'SELECT price FROM products WHERE product_id = 1;'}`
+
+
+[(Decimal('199.99'),)]
+Invoking: `calculate_discount` with `{'discount_percentage': 20, 'price': 199.99}`
+
+
+Original: $199.99, Discounted (20.0%): $159.99**Product ID 1**
+
+- **Original price:** $199.99  
+- **20 % discount:** $159.99  
+
+Let me know if you’d like to see more details or calculate discounts for other items!
+
+> Finished chain.
+
+Final Output: **Product ID 1**
+
+- **Original price:** $199.99  
+- **20 % discount:** $159.99  
+
+Let me know if you’d like to see more details or calculate discounts for other items!
+
+
+
+-----------------
+'''Expected Flow:
+            Agent runs SQL: SELECT price FROM products WHERE id = 1;
+            Agent extracts the price from the returned dataset.
+            Agent calls calculate_discount(price=<extracted_price>, discount_percentage=20).
+            Agent returns the formatted answer along with the persistent conversation state in Upstash Redis.
+    '''

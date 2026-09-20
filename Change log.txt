@@ -1,3 +1,4 @@
 1. Normal agent_exector
 2. Adding Memory agent_with_history
-    
+3. Adding redis for persistent storage
+4. Adding custom tools.

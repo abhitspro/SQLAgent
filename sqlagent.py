@@ -21,6 +21,10 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import RedisChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
+# for custom tools
+from langchain_core.tools import tool
+
+
 # 2. Build MySQL Connection String from Environment Variables
 # Read credentials from .env to keep passwords and host details hidden
 db_user = os.getenv("DB_USER", "root")
@@ -33,9 +37,27 @@ db_name = os.getenv("DB_NAME", "ecommerce_agent_db")
 ECOM_DB = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 REDIS_URL = os.getenv("REDIS_URL")
-
 if not REDIS_URL:
     raise ValueError("REDIS_URL is missing. Please check your .env file.")
+
+@tool
+def calculate_discount(price: float, discount_percentage: float) -> str:
+    """Calculates the final price after applying a percentage discount.
+    Use this tool when a user asks for discount calculations, promotional pricing, or sale quotes.
+    """
+    final_price = price * (1 - discount_percentage / 100)
+    return f"Original: ${price:.2f}, Discounted ({discount_percentage}%): ${final_price:.2f}"
+
+@tool
+def send_email_alert(recipient_email: str, subject: str, message: str) -> str:
+    """Sends an email notification to a specified address.
+    Use this tool ONLY when explicitly requested to alert or notify someone via email.
+    """
+    # Place actual email dispatch logic here (e.g., via SendGrid or SMTP)
+    return f"Alert email successfully dispatched to {recipient_email}."
+
+# Collect custom tools into a list
+custom_tools = [calculate_discount, send_email_alert]
 
 try:
     # 3. Initialize SQLDatabase wrapper from LangChain
@@ -63,24 +85,38 @@ try:
 
 
 
-    # Custom system instructions forcing SELECT-only operations
+    # # Custom system instructions forcing SELECT-only operations
+    # CUSTOM_SYSTEM_PREFIX = """
+    # You are an agent designed to interact with a SQL database.
+    # Given an input question, create a syntactically correct MySQL query to run, then look at the results and return the answer.
+
+    # CRITICAL SECURITY RULES:
+    # 1. You are strictly allowed to run SELECT queries ONLY.
+    # 2. NEVER execute DML or DDL statements (INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE, GRANT).
+    # 3. If the user asks you to modify, update, delete, or alter any data or tables, politely refuse.
+    # """
+
+    #  for extra tools
     CUSTOM_SYSTEM_PREFIX = """
-    You are an agent designed to interact with a SQL database.
-    Given an input question, create a syntactically correct MySQL query to run, then look at the results and return the answer.
+    You are an intelligent agent designed to interact with a MySQL database and execute helper tools.
+    Given an input question, evaluate whether to run SQL database queries or execute custom tools.
 
     CRITICAL SECURITY RULES:
     1. You are strictly allowed to run SELECT queries ONLY.
     2. NEVER execute DML or DDL statements (INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE, GRANT).
-    3. If the user asks you to modify, update, delete, or alter any data or tables, politely refuse.
     """
-    # 5. Create SQL Agent
-    agent_executor = create_sql_agent(
-        llm=llm,
-        db=db,
-        agent_type="tool-calling",
-        prefix= CUSTOM_SYSTEM_PREFIX,
-        verbose=True 
-    )
+
+
+
+
+    # # 5. Create SQL Agent
+    # agent_executor = create_sql_agent(
+    #     llm=llm,
+    #     db=db,
+    #     agent_type="tool-calling",
+    #     prefix= CUSTOM_SYSTEM_PREFIX,
+    #     verbose=True 
+    # )
 
     """When you pass agent_type="tool-calling", LangChain equips the LLM with a set of pre-built SQL tools:
         1. sql_db_list_tables: Lists all available tables in your database.
@@ -102,6 +138,7 @@ try:
         db=db,
         agent_type="tool-calling",
         prefix= CUSTOM_SYSTEM_PREFIX,
+        extra_tools=custom_tools, # to integrate custom tool
         prompt = prompt,
         verbose=True 
     )
@@ -183,21 +220,45 @@ try:
     # )
     # print("Q2 Answer:", response2["output"])
 
+    # test redis
+    # # 6. Test Call
+    # response = agent_with_history.invoke(
+    #     {"input": "Who is our top spending customer?"},
+    #     config={"configurable": {"session_id": "user_session_101"}}
+    # )
+    # print("\nQ1 Answer:", response["output"])
 
-    # 6. Test Call
+    # # 6. Test Call
+    # response = agent_with_history.invoke(
+    #     {"input": "What products did they order?"},
+    #     config={"configurable": {"session_id": "user_session_101"}}
+    # )
+    # print("\nQ2 Answer:", response["output"])
+
+    # test custom tools
+    # test case 01: Product ID 101 does not exist
     response = agent_with_history.invoke(
-        {"input": "Who is our top spending customer?"},
-        config={"configurable": {"session_id": "user_session_101"}}
+        {"input":"Find the price of product ID 101 from the database, and tell me what the cost would be with a 20% discount."},
+        config={"configurable": {"session_id": "custom_tool_session"}}
     )
-    print("\nQ1 Answer:", response["output"])
 
-        # 6. Test Call
+    print("\nResult:", response["output"])
+    # Result: I ran a query to look up the price for product ID 101, but that product isn’t in the `products` table (the table only contains IDs 1, 2, and 3). Because the price can’t be retrieved, I can’t calculate a 20 % discount for it. If you have a different product ID or need help with another item, just let me know!
+    #It correctly identified that Product ID 101 does not exist (and saw that valid IDs are 1, 2, and 3).
+
+    # test case 02: Valid Product ID
     response = agent_with_history.invoke(
-        {"input": "What products did they order?"},
-        config={"configurable": {"session_id": "user_session_101"}}
+        {"input": "Find the price of product ID 1, and tell me what its cost would be with a 20% discount."},
+        config={"configurable": {"session_id": "custom_tool_session"}}
     )
-    print("\nQ2 Answer:", response["output"])
 
+    print("\nFinal Output:", response["output"])
+    #  Final Output: **Product ID 1**
+
+    # - **Original price:** $199.99  
+    # - **20 % discount:** $159.99 
+
+    
 
 
 except Exception as e:

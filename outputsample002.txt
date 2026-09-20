@@ -1,0 +1,230 @@
+(.venv) PS E:\DS-GenAI\SQLAgent> & e:\DS-GenAI\SQLAgent\.venv\Scripts\python.exe e:/DS-GenAI/SQLAgent/sqlagent.py
+e:\DS-GenAI\SQLAgent\sqlagent.py:9: DeprecationWarning: `langchain-community` is being sunset and is no longer actively maintained. See https://github.com/langchain-ai/langchain-community/issues/674 for details and migration guidance toward standalone integration packages.
+  from langchain_community.utilities import SQLDatabase
+Connected to Dialect: mysql
+Available Tables: ['categories', 'customers', 'order_items', 'orders', 'products']
+<sys>:0: LangChainDeprecationWarning: RunnableWithMessageHistory is deprecated. Use LangGraph's built-in persistence instead.
+
+
+> Entering new SQL Agent Executor chain...
+
+Invoking: `sql_db_list_tables` with `{'tool_input': ''}`
+
+
+categories, customers, order_items, orders, products
+Invoking: `sql_db_schema` with `{'table_names': 'customers, orders, order_items, products'}`
+
+
+
+CREATE TABLE customers (
+        customer_id INTEGER NOT NULL AUTO_INCREMENT, 
+        first_name VARCHAR(50) NOT NULL, 
+        last_name VARCHAR(50) NOT NULL, 
+        email VARCHAR(100) NOT NULL, 
+        city VARCHAR(50), 
+        country VARCHAR(50), 
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+        PRIMARY KEY (customer_id)
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci
+
+/*
+3 rows from customers table:
+customer_id     first_name      last_name       email   city    country created_at
+1       Aarav   Sharma  aarav.sharma@example.com        Mumbai  India   2026-09-20 15:06:52
+2       Sophia  Chen    sophia.chen@example.com Toronto Canada  2026-09-20 15:06:52
+3       Liam    Smith   liam.smith@example.com  New York        USA     2026-09-20 15:06:52
+*/
+
+
+CREATE TABLE order_items (
+        order_item_id INTEGER NOT NULL AUTO_INCREMENT, 
+        order_id INTEGER, 
+        product_id INTEGER, 
+        quantity INTEGER NOT NULL, 
+        unit_price DECIMAL(10, 2) NOT NULL, 
+        PRIMARY KEY (order_item_id), 
+        CONSTRAINT order_items_ibfk_1 FOREIGN KEY(order_id) REFERENCES orders (order_id) ON DELETE CASCADE, 
+        CONSTRAINT order_items_ibfk_2 FOREIGN KEY(product_id) REFERENCES products (product_id) ON DELETE CASCADE
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci
+
+/*
+3 rows from order_items table:
+order_item_id   order_id        product_id      quantity        unit_price
+1       1       1       1       199.99
+2       1       2       1       89.50
+3       2       3       1       19.99
+*/
+
+
+CREATE TABLE orders (
+        order_id INTEGER NOT NULL AUTO_INCREMENT, 
+        customer_id INTEGER, 
+        order_date DATETIME DEFAULT CURRENT_TIMESTAMP, 
+        status ENUM('Pending','Shipped','Delivered','Cancelled') DEFAULT 'Pending', 
+        total_amount DECIMAL(10, 2) DEFAULT '0.00', 
+        PRIMARY KEY (order_id), 
+        CONSTRAINT orders_ibfk_1 FOREIGN KEY(customer_id) REFERENCES customers (customer_id) ON DELETE CASCADE
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci
+
+/*
+3 rows from orders table:
+order_id        customer_id     order_date      status  total_amount
+1       1       2026-02-10 10:30:00     Delivered       289.49
+2       2       2026-02-15 14:20:00     Shipped 119.89
+3       3       2026-03-01 09:15:00     Delivered       42.00
+*/
+
+
+CREATE TABLE products (
+        product_id INTEGER NOT NULL AUTO_INCREMENT, 
+        product_name VARCHAR(100) NOT NULL, 
+        category_id INTEGER, 
+        price DECIMAL(10, 2) NOT NULL, 
+        stock_quantity INTEGER DEFAULT '0', 
+        PRIMARY KEY (product_id), 
+        CONSTRAINT products_ibfk_1 FOREIGN KEY(category_id) REFERENCES categories (category_id) ON DELETE SET NULL
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci
+
+/*
+3 rows from products table:
+product_id      product_name    category_id     price   stock_quantity
+1       Wireless Noise-Canceling Headphones     1       199.99  45
+2       Mechanical Gaming Keyboard      1       89.50   30
+3       Cotton Crewneck T-Shirt 2       19.99   120
+*/
+Invoking: `sql_db_query_checker` with `{'query': "SELECT c.customer_id, CONCAT(c.first_name, ' ', c.last_name) AS name, SUM(o.total_amount) AS total_spent FROM customers c JOIN orders o ON c.customer_id = o.customer_id GROUP BY c.customer_id ORDER BY total_spent DESC LIMIT 1;"}`
+
+
+SELECT 
+    c.customer_id, 
+    CONCAT(c.first_name, ' ', c.last_name) AS name, 
+    SUM(o.total_amount) AS total_spent
+FROM 
+    customers c
+JOIN 
+    orders o ON c.customer_id = o.customer_id
+GROUP BY 
+    c.customer_id, c.first_name, c.last_name
+ORDER BY 
+    total_spent DESC
+LIMIT 1;
+Invoking: `sql_db_query` with `{'query': "SELECT c.customer_id, CONCAT(c.first_name, ' ', c.last_name) AS name, SUM(o.total_amount) AS total_spent FROM customers c JOIN orders o ON c.customer_id = o.customer_id GROUP BY c.customer_id, c.first_name, c.last_name ORDER BY total_spent DESC LIMIT 1;"}`
+
+
+[(1, 'Aarav Sharma', Decimal('369.39'))]**Top‑spending customer**
+
+| Customer ID | Name           | Total Spent |
+|-------------|----------------|-------------|
+| 1           | Aarav Sharma   | **$369.39** |
+
+Aarav Sharma has spent the most among all customers.
+
+> Finished chain.
+
+Q1 Answer: **Top‑spending customer**
+
+| Customer ID | Name           | Total Spent |
+|-------------|----------------|-------------|
+| 1           | Aarav Sharma   | **$369.39** |
+
+Aarav Sharma has spent the most among all customers.
+
+
+> Entering new SQL Agent Executor chain...
+
+Invoking: `sql_db_list_tables` with `{'tool_input': ''}`
+
+
+categories, customers, order_items, orders, products
+Invoking: `sql_db_schema` with `{'table_names': 'orders, order_items, products'}`
+
+
+
+CREATE TABLE order_items (
+        order_item_id INTEGER NOT NULL AUTO_INCREMENT, 
+        order_id INTEGER, 
+        product_id INTEGER, 
+        quantity INTEGER NOT NULL, 
+        unit_price DECIMAL(10, 2) NOT NULL, 
+        PRIMARY KEY (order_item_id), 
+        CONSTRAINT order_items_ibfk_1 FOREIGN KEY(order_id) REFERENCES orders (order_id) ON DELETE CASCADE, 
+        CONSTRAINT order_items_ibfk_2 FOREIGN KEY(product_id) REFERENCES products (product_id) ON DELETE CASCADE
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci
+
+/*
+3 rows from order_items table:
+order_item_id   order_id        product_id      quantity        unit_price
+1       1       1       1       199.99
+2       1       2       1       89.50
+3       2       3       1       19.99
+*/
+
+
+CREATE TABLE orders (
+        order_id INTEGER NOT NULL AUTO_INCREMENT, 
+        customer_id INTEGER, 
+        order_date DATETIME DEFAULT CURRENT_TIMESTAMP, 
+        status ENUM('Pending','Shipped','Delivered','Cancelled') DEFAULT 'Pending', 
+        total_amount DECIMAL(10, 2) DEFAULT '0.00', 
+        PRIMARY KEY (order_id), 
+        CONSTRAINT orders_ibfk_1 FOREIGN KEY(customer_id) REFERENCES customers (customer_id) ON DELETE CASCADE
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci
+
+/*
+3 rows from orders table:
+order_id        customer_id     order_date      status  total_amount
+1       1       2026-02-10 10:30:00     Delivered       289.49
+2       2       2026-02-15 14:20:00     Shipped 119.89
+3       3       2026-03-01 09:15:00     Delivered       42.00
+*/
+
+
+CREATE TABLE products (
+        product_id INTEGER NOT NULL AUTO_INCREMENT, 
+        product_name VARCHAR(100) NOT NULL, 
+        category_id INTEGER, 
+        price DECIMAL(10, 2) NOT NULL, 
+        stock_quantity INTEGER DEFAULT '0', 
+        PRIMARY KEY (product_id), 
+        CONSTRAINT products_ibfk_1 FOREIGN KEY(category_id) REFERENCES categories (category_id) ON DELETE SET NULL
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci
+
+/*
+3 rows from products table:
+product_id      product_name    category_id     price   stock_quantity
+1       Wireless Noise-Canceling Headphones     1       199.99  45
+2       Mechanical Gaming Keyboard      1       89.50   30
+3       Cotton Crewneck T-Shirt 2       19.99   120
+*/
+Invoking: `sql_db_query_checker` with `{'query': 'SELECT p.product_name, oi.quantity, oi.unit_price FROM order_items oi JOIN products p ON oi.product_id = p.product_id JOIN orders o ON oi.order_id = o.order_id WHERE o.customer_id = 1;'}`
+
+
+SELECT p.product_name, oi.quantity, oi.unit_price
+FROM order_items oi
+JOIN products p ON oi.product_id = p.product_id
+JOIN orders o ON oi.order_id = o.order_id
+WHERE o.customer_id = 1;
+Invoking: `sql_db_query` with `{'query': 'SELECT p.product_name, oi.quantity, oi.unit_price FROM order_items oi JOIN products p ON oi.product_id = p.product_id JOIN orders o ON oi.order_id = o.order_id WHERE o.customer_id = 1;'}`
+
+
+[('Wireless Noise-Canceling Headphones', 1, Decimal('199.99')), ('Mechanical Gaming Keyboard', 1, Decimal('89.50')), ('Stainless Steel Coffee Maker', 1, Decimal('79.90'))]**Products ordered by our top‑spending customer (Customer ID 1)**  
+
+| Product | Quantity | Unit Price |
+|---------|----------|------------|
+| Wireless Noise‑Canceling Headphones | 1 | $199.99 |
+| Mechanical Gaming Keyboard | 1 | $89.50 |
+| Stainless Steel Coffee Maker | 1 | $79.90 |
+
+These are the items that customer 1 purchased in their orders.
+
+> Finished chain.
+
+Q2 Answer: **Products ordered by our top‑spending customer (Customer ID 1)**  
+
+| Product | Quantity | Unit Price |
+|---------|----------|------------|
+| Wireless Noise‑Canceling Headphones | 1 | $199.99 |
+| Mechanical Gaming Keyboard | 1 | $89.50 |
+| Stainless Steel Coffee Maker | 1 | $79.90 |
+
+These are the items that customer 1 purchased in their orders.

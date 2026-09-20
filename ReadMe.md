@@ -1,46 +1,141 @@
-# 🤖 LangChain SQL Agent with MySQL & Groq
+# 🤖 Production SQL AI Agent with Persistent Memory & Custom Tools
 
-An intelligent, context-aware Natural Language-to-SQL AI Agent built using **LangChain**, **Groq (Llama 3.3)**, and **MySQL**.
-
-This application allows users to ask natural language questions about an e-commerce database (such as sales performance, top spending customers, product stock, and order statuses). The agent dynamically inspects database schemas, writes syntactically valid MySQL queries, executes them safely, and translates raw database results into clear human responses.
+An enterprise-ready AI Agent built with **LangChain**, **Groq (Llama 3.3 70B)**, **MySQL**, and **Upstash Redis**. The agent dynamically generates and executes secure read-only SQL queries while maintaining persistent conversation memory across sessions and leveraging custom Python tools.
 
 ---
-## 📌 .env format
-# Groq API Configuration
+
+## ✨ Features
+
+- **🚀 Llama 3.3 70B via Groq**: High-speed, high-accuracy tool calling and query generation.
+- **🛡️ Strict Read-Only Security**: System prompt guardrails enforce strictly `SELECT` statements, preventing any DDL/DML data modification (`INSERT`, `UPDATE`, `DELETE`, `DROP`).
+- **💾 Cloud Persistent Memory**: Powered by `langchain-redis` and **Upstash Redis** to maintain session-aware history across server restarts with configurable TTL expiration.
+- **🧰 Custom Tool Integration**: Extensible architecture via `extra_tools` allowing the agent to combine database execution with custom Python tools (e.g., business math, notifications).
+- **📦 Clean Modular Dependencies**: Up-to-date with current `langchain` package standards.
+
+---
+
+## 🏗️ Architecture Flow
+
+```text
+User Input ──> RunnableWithMessageHistory (Upstash Redis)
+                     │
+                     ▼
+          Llama-3.3-70B (Groq LLM)
+                     │
+        ┌────────────┴────────────┐
+        ▼                         ▼
+  SQL Database Toolkit       Custom Tools
+  (Read-Only MySQL)      (e.g., Discount Calc)
+        └────────────┬────────────┘
+                     │
+                     ▼
+               Final Response
+```
+
+---
+
+## 🛠️ Prerequisites & Stack
+
+- **Python**: 3.10+ (Recommended)
+- **Database**: MySQL Server
+- **Memory Store**: Upstash Redis (Serverless)
+- **LLM Provider**: Groq API
+
+---
+
+## 🚀 Quick Start Setup
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+cd YOUR_REPO_NAME
+```
+
+### 2. Set Up Virtual Environment
+```bash
+python -m venv .venv
+
+# On Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+# On macOS/Linux
+source .venv/bin/activate
+```
+
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 🔑 Environment Configuration (`.env`)
+
+Create a `.env` file in the project root with the following variables:
+
+```env
+# Groq API Key
 GROQ_API_KEY=your_groq_api_key_here
 
 # MySQL Database Configuration
 DB_USER=root
-DB_PASSWORD=your_mysql_password
+DB_PASSWORD=your_db_password
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=ecommerce_agent_db
 
-## 📌 Features
+# Upstash Redis Connection (TLS Protocol)
+REDIS_URL=rediss://default:YOUR_PASSWORD@YOUR_ENDPOINT.upstash.io:6379
+```
 
-* **Natural Language to SQL Translation:** Converts human text queries into complex multi-table SQL queries (`JOIN`, `GROUP BY`, `SUM`, `ORDER BY`).
-* **Tool Calling Capabilities:** Leverages native function calling (`agent_type="tool-calling"`) to inspect schemas and validate query syntax before execution.
-* **Strict Read-Only Guardrails:** Instructed via custom system prompts to execute `SELECT` queries only—preventing destructive operations like `DELETE`, `UPDATE`, or `DROP`.
-* **High Performance & Low Latency:** Powered by Groq's LPUs and Llama 3 models for ultra-fast response times.
-* **Environment Security:** Keeps sensitive credentials (database keys, API keys) safe using `python-dotenv`.
+> **Note:** Ensure your Upstash connection string starts with `rediss://` (with SSL/TLS enabled).
 
 ---
 
-## 🗄️ Database Architecture
+## 📋 Requirements (`requirements.txt`)
 
-The project connects to a standard relational E-Commerce database (`ecommerce_agent_db`) consisting of 5 interconnected tables:
-
-* **`customers`**: Stores customer profiles, locations, and registration dates.
-* **`categories`**: Product classifications (Electronics, Clothing, Books, etc.).
-* **`products`**: Item names, category links, pricing, and available stock.
-* **`orders`**: Tracking order dates, statuses (`Pending`, `Shipped`, `Delivered`, `Cancelled`), and total amounts.
-* **`order_items`**: Line-item breakdown linking orders to specific products with quantities and unit prices.
+```text
+langchain>=0.2.0
+langchain-groq
+langchain-redis>=0.1.0
+redis>=5.0.0
+mysql-connector-python
+SQLAlchemy
+python-dotenv
+```
 
 ---
 
-## 🛠️ Prerequisites & Installation
+## 🏃 Usage
 
-### 1. Clone the Repository
+Run the agent script:
+
 ```bash
-git clone [https://github.com/your-username/sql-agent-langchain.git](https://github.com/your-username/sql-agent-langchain.git)
-cd sql-agent-langchain
+python sqlagent.py
+```
+
+### Session Memory Example
+```python
+# First query stores state in Upstash under 'session_123'
+response = agent_with_history.invoke(
+    {"input": "Find the price of product ID 1 and calculate a 20% discount."},
+    config={"configurable": {"session_id": "session_123"}}
+)
+print(response["output"])
+
+# Follow-up query in the same session remembers context
+response2 = agent_with_history.invoke(
+    {"input": "Are there any other products in that same category?"},
+    config={"configurable": {"session_id": "session_123"}}
+)
+print(response2["output"])
+```
+
+---
+
+## 🛡️ Security Rules
+
+1. **SELECT-Only Enforcement**: System prompt explicitly refuses any request to perform `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, or `CREATE`.
+2. **Environment Protection**: Credentials are managed via `python-dotenv` and ignored in `.gitignore`.
+
+---
