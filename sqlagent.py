@@ -17,6 +17,10 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+# Import Redis message history module for Persistent Storage
+from langchain_community.chat_message_histories import RedisChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
 # 2. Build MySQL Connection String from Environment Variables
 # Read credentials from .env to keep passwords and host details hidden
 db_user = os.getenv("DB_USER", "root")
@@ -27,6 +31,11 @@ db_name = os.getenv("DB_NAME", "ecommerce_agent_db")
 
 # Format: mysql+mysqlconnector://<username>:<password>@<host>:<port>/<database_name>
 ECOM_DB = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+REDIS_URL = os.getenv("REDIS_URL")
+
+if not REDIS_URL:
+    raise ValueError("REDIS_URL is missing. Please check your .env file.")
 
 try:
     # 3. Initialize SQLDatabase wrapper from LangChain
@@ -105,41 +114,43 @@ try:
     """
 
 
-    # In-memory dictionary to hold session histories
-    store = {}
-
-    def get_session_history(session_id: str):
-        if session_id not in store:
-            store[session_id] = ChatMessageHistory()
-        return store[session_id]
+    # # In-memory dictionary to hold session histories
+    # store = {} 
+    
+    # implementing Redis for Persistent storage instead of store {}
+    # REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
+
+    # def get_session_history(session_id: str):
+    #     if session_id not in store:
+    #         store[session_id] = ChatMessageHistory()
+    #     return store[session_id]
+
+    # Replaces the old in-memory `store = {}` dictionary
+    def get_redis_session_history(session_id: str):
+        return RedisChatMessageHistory(
+            session_id=session_id,
+            url=REDIS_URL,
+            ttl=86400  # Automatically cleans up inactive sessions after 24 hours (86,400 seconds)
+        )
+
+
+
+    # agent_with_history = RunnableWithMessageHistory(
+    #     agent_executor, # what to run. Tells LangChain which agent workflow should be given memory capabilities.
+    #     get_session_history, # to fetch history
+    #     input_messages_key='input',    # what to store in history
+    #     history_messages_key="chat_history", # where to check for history
+    # )
+
+    # Wrap your existing agent executor
     agent_with_history = RunnableWithMessageHistory(
-        agent_executor, # what to run. Tells LangChain which agent workflow should be given memory capabilities.
-        get_session_history, # to fetch history
-        input_messages_key='input',    # what to store in history
-        history_messages_key="chat_history", # where to check for history
-
+        agent_executor,
+        get_redis_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
     )
-
-
-
-    # Invoke agent with history
-    # Session 1: Initial Question
-    response1 = agent_with_history.invoke( # distionary of input variables
-        {'input': "Who is our top spending customer?"},
-        config={"configurable": {"session_id": "user_session_1"}}  # for get_session_history()
-    )
-    print("Q1 Answer:", response1["output"])
-
-    # Session 1: Follow-up Question (Agent remembers previous answer context)
-    response2 = agent_with_history.invoke(
-        {"input": "What products did they order?"},
-        config={"configurable": {"session_id": "user_session_1"}}
-    )
-    print("Q2 Answer:", response2["output"])
-
-
 
 
 
@@ -155,6 +166,37 @@ try:
 
     # print("\n--- Output ---")
     # print(response["output"])
+    ##################################
+
+    # # Invoke agent with history
+    # # Session 1: Initial Question
+    # response1 = agent_with_history.invoke( # distionary of input variables
+    #     {'input': "Who is our top spending customer?"},
+    #     config={"configurable": {"session_id": "user_session_1"}}  # for get_session_history()
+    # )
+    # print("Q1 Answer:", response1["output"])
+
+    # # Session 1: Follow-up Question (Agent remembers previous answer context)
+    # response2 = agent_with_history.invoke(
+    #     {"input": "What products did they order?"},
+    #     config={"configurable": {"session_id": "user_session_1"}}
+    # )
+    # print("Q2 Answer:", response2["output"])
+
+
+    # 6. Test Call
+    response = agent_with_history.invoke(
+        {"input": "Who is our top spending customer?"},
+        config={"configurable": {"session_id": "user_session_101"}}
+    )
+    print("\nQ1 Answer:", response["output"])
+
+        # 6. Test Call
+    response = agent_with_history.invoke(
+        {"input": "What products did they order?"},
+        config={"configurable": {"session_id": "user_session_101"}}
+    )
+    print("\nQ2 Answer:", response["output"])
 
 
 
