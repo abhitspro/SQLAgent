@@ -5,6 +5,16 @@ An intelligent, context-aware Natural Language-to-SQL AI Agent built using **Lan
 This application allows users to ask natural language questions about an e-commerce database (such as sales performance, top spending customers, product stock, and order statuses). The agent dynamically inspects database schemas, writes syntactically valid MySQL queries, executes them safely, and translates raw database results into clear human responses.
 
 ---
+## 📌 .env format
+# Groq API Configuration
+GROQ_API_KEY=your_groq_api_key_here
+
+# MySQL Database Configuration
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=ecommerce_agent_db
 
 ## 📌 Features
 
